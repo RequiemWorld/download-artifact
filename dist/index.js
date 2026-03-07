@@ -1,6 +1,6 @@
 import * as os from 'os';
 import os__default, { EOL } from 'os';
-import * as crypto from 'crypto';
+import 'crypto';
 import * as fs from 'fs';
 import { promises, existsSync, readFileSync } from 'fs';
 import 'path';
@@ -32,6 +32,7 @@ import require$$1$5 from 'node:dns';
 import require$$5$3 from 'string_decoder';
 import 'child_process';
 import 'timers';
+import { DefaultArtifactClient } from '@actions/artifact';
 
 // We use any as a valid input type
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -152,36 +153,6 @@ function escapeProperty(s) {
         .replace(/\n/g, '%0A')
         .replace(/:/g, '%3A')
         .replace(/,/g, '%2C');
-}
-
-// For internal use, subject to change.
-// We use any as a valid input type
-/* eslint-disable @typescript-eslint/no-explicit-any */
-function issueFileCommand(command, message) {
-    const filePath = process.env[`GITHUB_${command}`];
-    if (!filePath) {
-        throw new Error(`Unable to find environment variable for file command ${command}`);
-    }
-    if (!fs.existsSync(filePath)) {
-        throw new Error(`Missing file at path: ${filePath}`);
-    }
-    fs.appendFileSync(filePath, `${toCommandValue(message)}${os.EOL}`, {
-        encoding: 'utf8'
-    });
-}
-function prepareKeyValueMessage(key, value) {
-    const delimiter = `ghadelimiter_${crypto.randomUUID()}`;
-    const convertedValue = toCommandValue(value);
-    // These should realistically never happen, but just in case someone finds a
-    // way to exploit uuid generation let's not allow keys or values that contain
-    // the delimiter.
-    if (key.includes(delimiter)) {
-        throw new Error(`Unexpected input: name should not contain the delimiter "${delimiter}"`);
-    }
-    if (convertedValue.includes(delimiter)) {
-        throw new Error(`Unexpected input: value should not contain the delimiter "${delimiter}"`);
-    }
-    return `${key}<<${delimiter}${os.EOL}${convertedValue}${os.EOL}${delimiter}`;
 }
 
 var commonjsGlobal = typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : typeof global !== 'undefined' ? global : typeof self !== 'undefined' ? self : {};
@@ -27962,22 +27933,13 @@ var ExitCode;
  */
 function getInput(name, options) {
     const val = process.env[`INPUT_${name.replace(/ /g, '_').toUpperCase()}`] || '';
-    return val.trim();
-}
-/**
- * Sets the value of an output.
- *
- * @param     name     name of the output to set
- * @param     value    value to store. Non-string values will be converted to a string via JSON.stringify
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function setOutput(name, value) {
-    const filePath = process.env['GITHUB_OUTPUT'] || '';
-    if (filePath) {
-        return issueFileCommand('OUTPUT', prepareKeyValueMessage(name, value));
+    if (options && options.required && !val) {
+        throw new Error(`Input required and not supplied: ${name}`);
     }
-    process.stdout.write(os.EOL);
-    issueCommand('set-output', { name }, toCommandValue(value));
+    if (options && options.trimWhitespace === false) {
+        return val;
+    }
+    return val.trim();
 }
 //-----------------------------------------------------------------------
 // Results
@@ -28917,6 +28879,15 @@ var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _argume
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
+function getAuthString(token, options) {
+    if (!token && !options.auth) {
+        throw new Error('Parameter token or opts.auth is required');
+    }
+    else if (token && options.auth) {
+        throw new Error('Parameters token and opts.auth may not both be specified');
+    }
+    return typeof options.auth === 'string' ? options.auth : `token ${token}`;
+}
 function getProxyAgent(destinationUrl) {
     const hc = new libExports.HttpClient();
     return hc.getAgent(destinationUrl);
@@ -32839,23 +32810,141 @@ const defaults = {
         fetch: getProxyFetch(baseUrl)
     }
 };
-Octokit.plugin(restEndpointMethods, paginateRest).defaults(defaults);
+const GitHub = Octokit.plugin(restEndpointMethods, paginateRest).defaults(defaults);
+/**
+ * Convience function to correctly format Octokit Options to pass into the constructor.
+ *
+ * @param     token    the repo PAT or GITHUB_TOKEN
+ * @param     options  other options to set
+ */
+function getOctokitOptions(token, options) {
+    const opts = Object.assign({}, {}); // Shallow clone - don't mutate the object provided by the caller
+    // Auth
+    const auth = getAuthString(token, opts);
+    if (auth) {
+        opts.auth = auth;
+    }
+    return opts;
+}
 
 const context = new Context();
-
-try {
-    // `who-to-greet` input defined in action metadata file
-    const nameToGreet = getInput("who-to-greet");
-    info(`Hello ${nameToGreet}!`);
-
-    // Get the current time and set it as an output variable
-    const time = new Date().toTimeString();
-    setOutput("time", time);
-
-    // Get the JSON webhook payload for the event that triggered the workflow
-    const payload = JSON.stringify(context.payload, undefined, 2);
-    info(`The event payload: ${payload}`);
-} catch (error) {
-    setFailed(error.message);
+/**
+ * Returns a hydrated octokit ready to use for GitHub Actions
+ *
+ * @param     token    the repo PAT or GITHUB_TOKEN
+ * @param     options  other options to set
+ */
+function getOctokit(token, options, ...additionalPlugins) {
+    const GitHubWithPlugins = GitHub.plugin(...additionalPlugins);
+    return new GitHubWithPlugins(getOctokitOptions(token));
 }
+
+/**
+ * Finds all workflow runs associated with a specific commit hash
+ * that were triggered by a push event.
+ */
+async function lookupWorkflowRunsByPushAndCommitHash(octokit, owner, repo, commitHash) {
+    const { data } = await octokit.rest.actions.listWorkflowRunsForRepo({
+        owner,
+        repo,
+        head_sha: commitHash,
+        event: 'push'
+    });
+    return data.workflow_runs;
+}
+
+/**
+ * Filters the list to find the latest run that is bound to a branch
+ * and specifically NOT a tag.
+ */
+async function findOnlyWorkflowRunWithoutTag(runs) {
+    // GitHub 'push' events for tags have a ref starting with 'refs/tags/'
+    // We filter for runs where the ref starts with 'refs/heads/' (a branch)
+    return runs.find(run =>
+        run.head_branch !== null &&
+        run.ref.startsWith('refs/heads/') &&
+        run.status === 'completed'
+    );
+}
+
+/**
+ * Locates a specific artifact by name within a Run ID and returns the match object.
+ * This remains a "pure" lookup without side effects like downloading.
+ */
+async function lookupArtifactWithNameInRunWithId(artifactClient, runId, owner, repo, token, artifactName) {
+    const findOptions = {
+        workflowRunId: runId,
+        repositoryOwner: owner,
+        repositoryName: repo,
+        token: token
+    };
+
+    // List all artifacts for the specific Run ID
+    const { artifacts } = await artifactClient.listArtifacts({
+        findBy: findOptions
+    });
+
+    const match = artifacts.find(a => a.name === artifactName);
+
+    if (!match) {
+        throw new Error(`Artifact '${artifactName}' not found in run ${runId}`);
+    }
+
+    return match;
+}
+
+async function run() {
+    try {
+        // 1. Gather Inputs
+        const path = getInput("path", { required: true });
+        const token = getInput("token", { required: true });
+        const commitHash = getInput("commit", { required: true });
+        const artifactName = getInput("artifact-name", { required: true });
+
+        const octokit = getOctokit(token);
+        const { owner, repo } = context.repo;
+        const artifactClient = new DefaultArtifactClient();
+
+        // 2. Resolve the Target Workflow Run
+        const allRuns = await lookupWorkflowRunsByPushAndCommitHash(octokit, owner, repo, commitHash);
+        const targetRun = await findOnlyWorkflowRunWithoutTag(allRuns);
+
+        if (!targetRun) {
+            throw new Error(`Could not find a completed branch-push run for hash: ${commitHash}`);
+        }
+        info(`Target Run ID identified: ${targetRun.id} (Branch: ${targetRun.head_branch})`);
+
+        // 3. Resolve the Specific Artifact ID
+        const artifactMatch = await lookupArtifactWithNameInRunWithId(
+            artifactClient,
+            targetRun.id,
+            owner,
+            repo,
+            token,
+            artifactName
+        );
+
+        info(`Found artifact ${artifactName} (ID: ${artifactMatch.id}). Starting download...`);
+
+        // 4. Execute the Download
+        await artifactClient.downloadArtifact(artifactMatch.id, {
+            path: path,
+            findBy: {
+                workflowRunId: targetRun.id,
+                repositoryOwner: owner,
+                repositoryName: repo,
+                token: token
+            }
+        });
+
+        info(`Success: Artifact downloaded to ${path}`);
+
+    } catch (error) {
+        // Set failed will catch both API errors and our custom Throws
+        setFailed(error.message);
+    }
+}
+
+// Start the action
+run();
 //# sourceMappingURL=index.js.map
