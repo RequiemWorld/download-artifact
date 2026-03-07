@@ -17,6 +17,7 @@
   },
   "homepage": "https://github.com/RequiemWorld/download-artifact#readme",
   "dependencies": {
+    "@actions/artifact": "^6.2.0",
     "@actions/core": "^3.0.0",
     "@actions/github": "^9.0.0"
   },
