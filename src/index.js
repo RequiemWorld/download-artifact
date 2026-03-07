@@ -31,7 +31,8 @@ async function findOnlyWorkflowRunWithoutTag(runs) {
 }
 
 /**
- * Locates a specific artifact by name within a Run ID and downloads it.
+ * Locates a specific artifact by name within a Run ID and returns the match object.
+ * This remains a "pure" lookup without side effects like downloading.
  */
 async function lookupArtifactWithNameInRunWithId(artifactClient, runId, owner, repo, token, artifactName) {
     const findOptions = {
@@ -52,17 +53,13 @@ async function lookupArtifactWithNameInRunWithId(artifactClient, runId, owner, r
         throw new Error(`Artifact '${artifactName}' not found in run ${runId}`);
     }
 
-    core.info(`Found artifact ${artifactName} (ID: ${match.id}). Downloading...`);
-
-    // Download the matched artifact
-    return await artifactClient.downloadArtifact(match.id, {
-        path: './output',
-        findBy: findOptions
-    });
+    return match;
 }
 
 async function run() {
     try {
+        // 1. Gather Inputs
+        const path = core.getInput("path", { required: true });
         const token = core.getInput("token", { required: true });
         const commitHash = core.getInput("commit", { required: true });
         const artifactName = core.getInput("artifact-name", { required: true });
@@ -70,17 +67,18 @@ async function run() {
         const octokit = github.getOctokit(token);
         const { owner, repo } = github.context.repo;
         const artifactClient = new DefaultArtifactClient();
-        // 1. Get all runs for the hash
+
+        // 2. Resolve the Target Workflow Run
         const allRuns = await lookupWorkflowRunsByPushAndCommitHash(octokit, owner, repo, commitHash);
-        // 2. Identify the specific branch-based run
         const targetRun = await findOnlyWorkflowRunWithoutTag(allRuns);
 
         if (!targetRun) {
             throw new Error(`Could not find a completed branch-push run for hash: ${commitHash}`);
         }
-        core.info(`Target Run ID identified: ${targetRun.id} (${targetRun.head_branch})`);
-        // 3. Artifact Download
-        await lookupArtifactWithNameInRunWithId(
+        core.info(`Target Run ID identified: ${targetRun.id} (Branch: ${targetRun.head_branch})`);
+
+        // 3. Resolve the Specific Artifact ID
+        const artifactMatch = await lookupArtifactWithNameInRunWithId(
             artifactClient,
             targetRun.id,
             owner,
@@ -89,11 +87,26 @@ async function run() {
             artifactName
         );
 
-        core.info("Success: Artifact downloaded to ./output");
+        core.info(`Found artifact ${artifactName} (ID: ${artifactMatch.id}). Starting download...`);
+
+        // 4. Execute the Download
+        await artifactClient.downloadArtifact(artifactMatch.id, {
+            path: path,
+            findBy: {
+                workflowRunId: targetRun.id,
+                repositoryOwner: owner,
+                repositoryName: repo,
+                token: token
+            }
+        });
+
+        core.info(`Success: Artifact downloaded to ${path}`);
 
     } catch (error) {
+        // Set failed will catch both API errors and our custom Throws
         core.setFailed(error.message);
     }
 }
 
+// Start the action
 run();

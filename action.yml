@@ -2,6 +2,9 @@ name: Download Artifact
 description: Download artifact that is not a part of the current run.
 
 inputs:
+  path:
+    description: 'The path to download the artifact to.'
+    required: true
   token:
     description: 'GitHub token (secrets.GITHUB_TOKEN or a PAT) used to query the API.'
     required: true

@@ -15,7 +15,15 @@ jobs:
   attempt-to-download-artifact-on-tagged-commit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v5
+      - uses: RequiemWorld/download-artifact@24
+        with:
+          path: ./directory_or_something
+          name: ${{ github.sha }}
+
+  get-feedback-for-non-existent-artifact:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: RequiemWorld/download-artifact@24
         with:
           path: ./directory_or_something
           name: ${{ github.sha }}
