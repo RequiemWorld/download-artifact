@@ -2,7 +2,8 @@
   "dependencies": {
     "@actions/artifact": "^6.2.0",
     "@actions/core": "^3.0.0",
-    "@actions/github": "^9.0.0"
+    "@actions/github": "^9.0.0",
+    "root": "github:actions/toolkit"
   },
   "devDependencies": {
     "@rollup/plugin-commonjs": "^29.0.2",
