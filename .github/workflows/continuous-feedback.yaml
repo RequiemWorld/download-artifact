@@ -3,7 +3,7 @@ on:
     branches:
       - main
     tags:
-      - *
+      - "*"
 jobs:
   upload-artifact-every-push:
     runs-on: ubuntu-latest
