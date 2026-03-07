@@ -2,6 +2,8 @@ on:
   push:
     branches:
       - main
+    tags:
+      - *
 jobs:
   upload-artifact-every-push:
     runs-on: ubuntu-latest
@@ -15,13 +17,15 @@ jobs:
 
   # This job will now correctly find the branch-push run even if triggered on a tag
   attempt-to-download-artifact-on-tagged-commit:
+    if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
     steps:
       - name: Download from branch push
         uses: RequiemWorld/download-artifact@65566fc43f2a84c2fc171979f2ade13a767472d4
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          commit-sha: ${{ github.sha }}
+          path: "./download"
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit: ${{ github.sha }}
           artifact-name: ${{ github.sha }}
 
   get-feedback-for-non-existent-artifact:
@@ -30,6 +34,7 @@ jobs:
       - name: Attempt download of missing item
         uses: RequiemWorld/download-artifact@65566fc43f2a84c2fc171979f2ade13a767472d4
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          commit-sha: ${{ github.sha }}
-          artifact-name: "some-fake-name"
+          path: ./download
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit: ${{ github.sha }}
+          artifact-name: "non-existent123455667"
