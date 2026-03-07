@@ -8,7 +8,7 @@ jobs:
     steps:
       - name: "use the download artifact action and see what happens"
         id: hello
-        uses: RequiemWorld/download-artifact
+        uses: RequiemWorld/download-artifact@e9c3b5dc65df8b36c478e0ea9374dcc10cbc0fa6
         with:
           who-to-greet: Mona the Octocat
 
