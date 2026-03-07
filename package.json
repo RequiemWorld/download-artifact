@@ -15,5 +15,9 @@
   "bugs": {
     "url": "https://github.com/RequiemWorld/download-artifact/issues"
   },
-  "homepage": "https://github.com/RequiemWorld/download-artifact#readme"
+  "homepage": "https://github.com/RequiemWorld/download-artifact#readme",
+  "dependencies": {
+    "@actions/core": "^3.0.0",
+    "@actions/github": "^9.0.0"
+  }
 }
