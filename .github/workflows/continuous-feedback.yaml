@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download from branch push
-        uses: RequiemWorld/download-artifact@f4c059d90df933544788015b801525cbc200cccb
+        uses: RequiemWorld/download-artifact@d4a63c6b8a8d1ec64642d4d1f9ea1b47402c3f1e
         with:
           path: "./download"
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -32,7 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Attempt download of missing item
-        uses: RequiemWorld/download-artifact@f4c059d90df933544788015b801525cbc200cccb
+        uses: RequiemWorld/download-artifact@d4a63c6b8a8d1ec64642d4d1f9ea1b47402c3f1e
         with:
           path: ./download
           token: ${{ secrets.GITHUB_TOKEN }}
