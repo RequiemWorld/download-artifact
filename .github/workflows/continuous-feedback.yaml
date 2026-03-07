@@ -3,12 +3,19 @@ on:
     branches:
       - main
 jobs:
-  continuously-run-for-feedback:
+  upload-artifact-every-push:
     runs-on: ubuntu-latest
     steps:
-      - name: "use the download artifact action and see what happens"
-        id: hello
-        uses: RequiemWorld/download-artifact@e9c3b5dc65df8b36c478e0ea9374dcc10cbc0fa6
+      - run: echo >> hello_world.txt
+      - name: "upload hello world artifact"
+        uses: actions/upload-artifact@v5
         with:
-          who-to-greet: Mona the Octocat
-
+          path: hello_world.txt
+          name: ${{ github.sha }}
+  attempt-to-download-artifact-on-tagged-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          path: ./directory_or_something
+          name: ${{ github.sha }}
