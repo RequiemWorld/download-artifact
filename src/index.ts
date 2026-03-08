@@ -85,7 +85,7 @@ async function main(workflowFacade: LocalizedWorkflowFacade) {
         core.error("unable to find a workflow run matching the given criteria")
         return;
     }
-    core.info(String(relevantWorkflowRun));
+    core.info(JSON.stringify(relevantWorkflowRun));
 
 }
 

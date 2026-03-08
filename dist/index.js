@@ -32879,7 +32879,7 @@ async function main(workflowFacade) {
         error("unable to find a workflow run matching the given criteria");
         return;
     }
-    info(String(relevantWorkflowRun));
+    info(JSON.stringify(relevantWorkflowRun));
 }
 async function run() {
     info("hello world");
