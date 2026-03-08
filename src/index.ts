@@ -90,6 +90,12 @@ async function main(workflowFacade: LocalizedWorkflowFacade) {
 }
 
 async function run() {
+    core.info("hello world");
+    core.info("hello world");
+    core.info("hello world");
+    core.info("hello world");
+    core.info("hello world");
+    core.info("hello world");
     const token = core.getInput("token", { required: true });
     const octokit = github.getOctokit(token);
     const workflowFacade = new LocalizedWorkflowFacade(octokit, github.context);
