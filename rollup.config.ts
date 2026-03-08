@@ -15,8 +15,12 @@ const config = {
         nodeResolve({ preferBuiltins: true }),
         commonjs(),
         json(),
-        typescript()
-    ],
+        typescript({
+            tsconfig: false,       // ignore tsconfig.json completely
+            declaration: false,    // don’t generate .d.ts
+            declarationMap: false, // don’t generate .d.ts map
+            target: 'ESNext'       // set JS output target
+        })    ],
 };
 
 export default config;
